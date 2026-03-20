@@ -1,6 +1,12 @@
 # Data files
 data/
 
+# Environment config (contains secrets)
+.env
+.env.local
+.env.production
+!.env.example
+
 # Python
 __pycache__/
 *.pyc

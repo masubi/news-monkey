@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
+import config  # noqa: F401 — loads .env into os.environ before other modules read it
 import database as db
 import processing
 import ollama_client

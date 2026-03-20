@@ -43,13 +43,14 @@ if [ -f "$SCRIPT_DIR/.venv/bin/python3" ]; then
 else
     PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
 fi
-nohup "$PYTHON" -m uvicorn app:app --host 0.0.0.0 --port "$PORT" > "$SCRIPT_DIR/app.log" 2>&1 &
+mkdir -p "$SCRIPT_DIR/data"
+nohup "$PYTHON" -m uvicorn app:app --host 0.0.0.0 --port "$PORT" > "$SCRIPT_DIR/data/app.log" 2>&1 &
 APP_PID=$!
 
 # Wait for startup
 sleep 2
 if ! kill -0 "$APP_PID" 2>/dev/null; then
-    echo "ERROR: Failed to start News Monkey. Check app.log for details." >&2
+    echo "ERROR: Failed to start News Monkey. Check data/app.log for details." >&2
     exit 1
 fi
 
