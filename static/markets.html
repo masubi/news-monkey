@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Monkey — Unusual Polymarket Bets</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-left">
+            <h1><a href="/" class="logo-link">News Monkey</a></h1>
+            <span class="tagline">Facts. Signal. Events.</span>
+            <nav class="header-nav">
+                <a href="/" class="nav-link">News Feed</a>
+                <a href="/markets" class="nav-link active">Unusual Polymarket Bets</a>
+                <a href="/gaps" class="nav-link">Social vs Traditional Gaps</a>
+                <a href="/ai" class="nav-link">AI Intelligence</a>
+                <a href="/sources" class="nav-link">Sources</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span id="update-indicator" class="update-indicator"></span>
+        </div>
+    </header>
+
+    <div id="app">
+        <main id="main-content" class="markets-page">
+            <section class="markets-header">
+                <h2>Unusual Polymarket Bets</h2>
+                <p class="markets-subtitle">Markets with unusually large size, volume spikes, or significant probability shifts. Grouped by category with filter and sort controls.</p>
+                <div class="markets-controls">
+                    <select id="category-filter" class="markets-filter-select">
+                        <option value="">All Categories</option>
+                        <option value="Politics">Politics</option>
+                        <option value="Crypto">Crypto</option>
+                        <option value="Macro">Macro</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Tech">Tech</option>
+                        <option value="Culture">Culture</option>
+                    </select>
+                    <select id="sort-by" class="markets-filter-select">
+                        <option value="volume_spike">Sort: Volume Spike</option>
+                        <option value="volume">Sort: Total Volume</option>
+                        <option value="probability">Sort: Probability</option>
+                        <option value="end_date">Sort: Time Remaining</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Unusual Bets Section (collapsible) -->
+            <section class="admin-section markets-section">
+                <div class="section-header-collapsible" id="unusual-toggle">
+                    <h3 class="section-title">Unusual Activity <span class="collapse-icon">&#9660;</span></h3>
+                    <span class="section-badge" id="unusual-count"></span>
+                </div>
+                <div id="unusual-bets-list" class="markets-grid"></div>
+            </section>
+
+            <!-- All Markets Section (collapsible, expanded by default per user feedback) -->
+            <section class="admin-section markets-section">
+                <div class="section-header-collapsible" id="all-toggle">
+                    <h3 class="section-title">All Tracked Markets <span class="collapse-icon">&#9660;</span></h3>
+                    <span class="section-badge" id="all-count"></span>
+                </div>
+                <div id="all-bets-list" class="markets-grid"></div>
+            </section>
+
+            <!-- Market-Linked Events Section (expanded by default per user feedback) -->
+            <section class="admin-section markets-section">
+                <div class="section-header-collapsible" id="linked-toggle">
+                    <h3 class="section-title">Market-Linked Events <span class="collapse-icon">&#9660;</span></h3>
+                </div>
+                <div id="linked-events-list" class="markets-grid"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        let allBetsData = [];
+        let unusualBetsData = [];
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function safeHref(url) {
+            if (!url) return '';
+            const trimmed = url.trim().toLowerCase();
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                return escapeHtml(url);
+            }
+            return '';
+        }
+
+        function relativeTime(ts) {
+            if (ts == null || isNaN(ts)) return '';
+            const seconds = Math.floor((Date.now() / 1000) - ts);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        function impactClass(bet) {
+            const vol = bet.volume || 0;
+            if (vol > 5000000) return 'high';
+            if (vol > 1000000) return 'medium';
+            return 'low';
+        }
+
+        function impactLabel(bet) {
+            const vol = bet.volume || 0;
+            if (vol > 5000000) return 'High Impact';
+            if (vol > 1000000) return 'Medium Impact';
+            return 'Low Impact';
+        }
+
+        function formatVolume(vol) {
+            if (!vol) return '$0';
+            if (vol >= 1000000) return '$' + (vol / 1000000).toFixed(1) + 'M';
+            if (vol >= 1000) return '$' + (vol / 1000).toFixed(0) + 'K';
+            return '$' + vol.toFixed(0);
+        }
+
+        function betUrl(bet) {
+            // Prefer server-validated URL if available
+            if (bet.url) return bet.url;
+            if (bet.slug && bet.slug.length > 0) {
+                const source = bet.source || 'polymarket';
+                const validSlug = /^[a-zA-Z0-9][a-zA-Z0-9\-_]+$/.test(bet.slug);
+                if (!validSlug) return '';
+                if (source === 'callsheet') return 'https://callsheet.com/event/' + encodeURIComponent(bet.slug);
+                if (source === 'kalshi') return 'https://kalshi.com/markets/' + encodeURIComponent(bet.slug);
+                return 'https://polymarket.com/event/' + encodeURIComponent(bet.slug);
+            }
+            return '';
+        }
+
+        function sourceLabel(bet) {
+            const src = bet.source || 'polymarket';
+            if (src === 'callsheet') return '<span class="badge badge-source-market callsheet">CallSheet</span>';
+            if (src === 'kalshi') return '<span class="badge badge-source-market kalshi">Kalshi</span>';
+            return '<span class="badge badge-source-market polymarket">Polymarket</span>';
+        }
+
+        function guessCategory(bet) {
+            const q = (bet.question || '').toLowerCase() + ' ' + (bet.category || '').toLowerCase();
+            if (/bitcoin|ethereum|crypto|btc|eth|solana|defi/.test(q)) return 'Crypto';
+            if (/president|election|congress|senate|trump|biden|governor|political|legislation|impeach/.test(q)) return 'Politics';
+            if (/fed|inflation|gdp|recession|interest rate|cpi|treasury|tariff|trade war|macro/.test(q)) return 'Macro';
+            if (/nfl|nba|mlb|soccer|football|tennis|sport|championship|super bowl/.test(q)) return 'Sports';
+            if (/ai |artificial|openai|google|apple|microsoft|tech|chip|semiconductor/.test(q)) return 'Tech';
+            return 'Culture';
+        }
+
+        function renderBetRow(bet) {
+            const pct = Math.round((bet.probability || 0) * 100);
+            const url = betUrl(bet);
+            const impact = impactClass(bet);
+            const questionHtml = url
+                ? `<a href="${safeHref(url)}" target="_blank" rel="noopener" title="View on market">${escapeHtml(bet.question)}</a>`
+                : escapeHtml(bet.question);
+            const volSpike = bet.volume_24h && bet.volume ? Math.round((bet.volume_24h / bet.volume) * 100) : 0;
+
+            return `
+                <div class="bet-row" data-category="${escapeHtml(guessCategory(bet))}">
+                    <div class="bet-row-main" role="button" tabindex="0" aria-expanded="false">
+                        <span class="bet-row-prob" title="Market-implied probability of outcome (0-100%)">${pct}%</span>
+                        <span class="bet-row-question">${questionHtml}</span>
+                        <span class="badge badge-impact ${impact}" title="Impact based on volume">${impactLabel(bet)}</span>
+                        ${sourceLabel(bet)}
+                        <span class="bet-stat" title="Total volume">Vol: ${formatVolume(bet.volume)}</span>
+                        <span class="bet-stat bet-stat-hot" title="24h volume${volSpike > 5 ? ' (spike!)' : ''}">24h: ${formatVolume(bet.volume_24h)}</span>
+                        ${bet.end_date ? `<span class="bet-stat" title="Resolution date">Ends: ${escapeHtml(bet.end_date)}</span>` : ''}
+                        ${bet.unusual_reason ? `<span class="bet-unusual-tag">${escapeHtml(bet.unusual_reason)}</span>` : ''}
+                    </div>
+                    <div class="bet-row-detail hidden">
+                        <div class="bet-detail-inner">
+                            ${bet.resolution_criteria ? `<div class="bet-detail-field"><span class="bet-detail-label">Resolution:</span> ${escapeHtml(bet.resolution_criteria)}</div>` : ''}
+                            <div class="bet-detail-field"><span class="bet-detail-label">Volume History:</span> Total ${formatVolume(bet.volume)}, 24h ${formatVolume(bet.volume_24h)}${volSpike > 5 ? ` (${volSpike}% spike)` : ''}</div>
+                            <div class="bet-detail-field"><span class="bet-detail-label">Category:</span> ${escapeHtml(guessCategory(bet))}</div>
+                            <div class="bet-detail-footer">
+                                <div class="market-odds-bar-mini" style="flex:1"><div class="market-odds-fill" style="width:${pct}%"></div></div>
+                                <span class="probability-tooltip" title="Market-implied probability of outcome (0-100%). Based on current trading prices.">Prob. ${pct}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderLinkedEvent(event) {
+            const pct = event.market_odds != null ? Math.round(event.market_odds * 100) : null;
+            return `
+                <div class="market-bet-card linked-event-card">
+                    <div class="bet-card-header">
+                        ${pct != null ? `<span class="bet-probability-large" title="Market-implied probability of outcome (0-100%)">${pct}%</span>` : ''}
+                        <span class="badge badge-impact ${['high','medium','low'].includes(event.impact) ? event.impact : 'medium'}">${((event.impact || 'medium').charAt(0).toUpperCase() + (event.impact || 'medium').slice(1))} Impact</span>
+                    </div>
+                    <div class="bet-card-body">
+                        <div class="bet-question-text"><a href="/#event-${escapeHtml(event.id)}">${escapeHtml(event.neutral_headline || event.headline)}</a></div>
+                        ${event.market_question ? `<div class="bet-market-question">${escapeHtml(event.market_question)}</div>` : ''}
+                        <div class="bet-card-meta">
+                            <span class="bet-stat">Sources: ${event.source_count || 0}</span>
+                            ${event.market_volume ? `<span class="bet-stat">Vol: ${formatVolume(event.market_volume)}</span>` : ''}
+                            <span class="bet-stat">Updated: ${relativeTime(event.latest_timestamp)}</span>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function initCollapsible(toggleId, contentId) {
+            const toggle = document.getElementById(toggleId);
+            const content = document.getElementById(contentId);
+            if (!toggle || !content) return;
+            toggle.setAttribute('role', 'button');
+            toggle.setAttribute('tabindex', '0');
+            toggle.setAttribute('aria-expanded', !content.classList.contains('collapsed'));
+            function toggleSection() {
+                content.classList.toggle('collapsed');
+                const expanded = !content.classList.contains('collapsed');
+                toggle.setAttribute('aria-expanded', expanded);
+                const icon = toggle.querySelector('.collapse-icon');
+                icon.textContent = expanded ? '\u25BC' : '\u25B6';
+            }
+            toggle.addEventListener('click', toggleSection);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(); }
+            });
+        }
+
+        function sortBets(bets, sortBy) {
+            return [...bets].sort((a, b) => {
+                switch (sortBy) {
+                    case 'volume': return (b.volume || 0) - (a.volume || 0);
+                    case 'probability': return (b.probability || 0) - (a.probability || 0);
+                    case 'end_date': return (a.end_date || 'z').localeCompare(b.end_date || 'z');
+                    case 'volume_spike':
+                    default:
+                        const spikeA = a.volume ? (a.volume_24h || 0) / a.volume : 0;
+                        const spikeB = b.volume ? (b.volume_24h || 0) / b.volume : 0;
+                        return spikeB - spikeA;
+                }
+            });
+        }
+
+        function renderGroupedBets(bets, containerId) {
+            const container = document.getElementById(containerId);
+            if (!bets.length) {
+                container.innerHTML = '<p class="empty-msg">No markets found.</p>';
+                return;
+            }
+            // Group by category
+            const groups = {};
+            bets.forEach(b => {
+                const cat = guessCategory(b);
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(b);
+            });
+            let html = '';
+            const sortedCats = Object.keys(groups).sort();
+            sortedCats.forEach((cat, idx) => {
+                const catBets = groups[cat];
+                html += `<div class="bet-category-group">
+                    <div class="bet-category-header" role="button" tabindex="0" aria-expanded="true">
+                        <span class="bet-category-name">${escapeHtml(cat)}</span>
+                        <span class="section-badge">${catBets.length}</span>
+                        <span class="collapse-icon">&#9660;</span>
+                    </div>
+                    <div class="bet-category-items">
+                        ${catBets.map(renderBetRow).join('')}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function applyFilters() {
+            const catFilter = document.getElementById('category-filter').value;
+            const sortBy = document.getElementById('sort-by').value;
+
+            let filtered = unusualBetsData;
+            if (catFilter) filtered = filtered.filter(b => guessCategory(b) === catFilter);
+            filtered = sortBets(filtered, sortBy);
+            document.getElementById('unusual-count').textContent = filtered.length + ' markets';
+            renderGroupedBets(filtered, 'unusual-bets-list');
+
+            // Deduplicate: exclude bets already shown in Unusual Activity
+            const unusualKeys = new Set(filtered.map(b => b.question || b.slug));
+            let allFiltered = allBetsData.filter(b => !unusualKeys.has(b.question || b.slug));
+            if (catFilter) allFiltered = allFiltered.filter(b => guessCategory(b) === catFilter);
+            allFiltered = sortBets(allFiltered, sortBy);
+            document.getElementById('all-count').textContent = allFiltered.length + ' markets';
+            renderGroupedBets(allFiltered, 'all-bets-list');
+        }
+
+        async function loadMarkets() {
+            // Show skeleton loaders while fetching
+            const skelHtml = '<div class="skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div></div>'.repeat(3);
+            document.getElementById('unusual-bets-list').innerHTML = skelHtml;
+            document.getElementById('all-bets-list').innerHTML = skelHtml;
+            document.getElementById('linked-events-list').innerHTML = skelHtml;
+            try {
+                const [unusualRes, allRes, eventsRes] = await Promise.all([
+                    fetch('/api/polymarket/unusual?limit=50'),
+                    fetch('/api/polymarket/all?limit=100'),
+                    fetch('/api/events?time_range=7d&market_moving=true&limit=20')
+                ]);
+                if (!unusualRes.ok || !allRes.ok || !eventsRes.ok) throw new Error('API error');
+                const unusualData = await unusualRes.json();
+                const allData = await allRes.json();
+                const eventsData = await eventsRes.json();
+
+                // Filter out near-0% and near-100% bets (gaming contracts)
+                unusualBetsData = (unusualData.bets || []).filter(b => b.probability > 0.05 && b.probability < 0.95);
+                allBetsData = (allData.bets || []).filter(b => b.probability > 0.05 && b.probability < 0.95);
+
+                applyFilters();
+
+                // Linked events
+                const linkedEvents = (eventsData.events || []).filter(e => e.market_odds != null);
+                document.getElementById('linked-events-list').innerHTML = linkedEvents.length
+                    ? linkedEvents.map(renderLinkedEvent).join('')
+                    : '<p class="empty-msg">No market-linked events found in the last 7 days.</p>';
+
+            } catch (err) {
+                console.error('Error loading markets:', err);
+                document.getElementById('unusual-bets-list').innerHTML = '<p class="error-msg">Failed to load market data.</p>';
+                document.getElementById('all-bets-list').innerHTML = '';
+                document.getElementById('linked-events-list').innerHTML = '';
+            }
+        }
+
+        // Event delegation for bet row expand/collapse
+        function toggleBetRow(betMain) {
+            const detail = betMain.parentElement.querySelector('.bet-row-detail');
+            if (detail) {
+                detail.classList.toggle('hidden');
+                betMain.setAttribute('aria-expanded', !detail.classList.contains('hidden'));
+            }
+        }
+        function toggleCatHeader(catHeader) {
+            const items = catHeader.nextElementSibling;
+            if (items) {
+                if (items.hasAttribute('hidden')) { items.removeAttribute('hidden'); }
+                else { items.setAttribute('hidden', ''); }
+                const collapsed = items.hasAttribute('hidden');
+                const icon = catHeader.querySelector('.collapse-icon');
+                if (icon) icon.textContent = collapsed ? '\u25B6' : '\u25BC';
+                catHeader.setAttribute('aria-expanded', !collapsed);
+            }
+        }
+        document.getElementById('app').addEventListener('click', function(e) {
+            const betMain = e.target.closest('.bet-row-main');
+            if (betMain) { toggleBetRow(betMain); return; }
+            const catHeader = e.target.closest('.bet-category-header');
+            if (catHeader) toggleCatHeader(catHeader);
+        });
+        document.getElementById('app').addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const betMain = e.target.closest('.bet-row-main');
+            if (betMain) { e.preventDefault(); toggleBetRow(betMain); return; }
+            const catHeader = e.target.closest('.bet-category-header');
+            if (catHeader) { e.preventDefault(); toggleCatHeader(catHeader); }
+        });
+
+        document.getElementById('category-filter').addEventListener('change', applyFilters);
+        document.getElementById('sort-by').addEventListener('change', applyFilters);
+        initCollapsible('unusual-toggle', 'unusual-bets-list');
+        initCollapsible('all-toggle', 'all-bets-list');
+        initCollapsible('linked-toggle', 'linked-events-list');
+        loadMarkets();
+    })();
+    </script>
+</body>
+</html>

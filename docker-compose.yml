@@ -1,0 +1,110 @@
+version: "3.8"
+
+services:
+  # Ingestion service: RSS feed polling, article scraping, Polymarket, social, NewsAPI
+  ingestion:
+    build: .
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - NEWS_MONKEY_DB=/app/data/news_monkey.db
+      - NEWS_MONKEY_DATA_DIR=/app/data
+      - ENABLE_INGESTION=true
+      - RSS_POLL_INTERVAL=300
+      - POLYMARKET_POLL_INTERVAL=600
+      - SOCIAL_POLL_INTERVAL=300
+      - NEWSAPI_POLL_INTERVAL=600
+      - NEWSAPI_KEY=${NEWSAPI_KEY:-}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SERVICE_ROLE=ingestion
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Embedding & clustering service: vector store, semantic clustering, deduplication
+  embedding:
+    build: .
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "8003:8003"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - NEWS_MONKEY_DB=/app/data/news_monkey.db
+      - NEWS_MONKEY_DATA_DIR=/app/data
+      - ENABLE_INGESTION=false
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SERVICE_ROLE=embedding
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Fact extraction service: LLM-based claim extraction and neutralization
+  fact-extraction:
+    build: .
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8004"]
+    ports:
+      - "8004:8004"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - NEWS_MONKEY_DB=/app/data/news_monkey.db
+      - NEWS_MONKEY_DATA_DIR=/app/data
+      - ENABLE_INGESTION=false
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SERVICE_ROLE=fact_extraction
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # API service: REST endpoints, WebSocket, stats
+  api:
+    build: .
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - NEWS_MONKEY_DB=/app/data/news_monkey.db
+      - NEWS_MONKEY_DATA_DIR=/app/data
+      - ENABLE_INGESTION=false
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SERVICE_ROLE=api
+    depends_on:
+      - ingestion
+      - ollama
+    restart: unless-stopped
+
+  # Frontend service: serves static dashboard files
+  frontend:
+    build: .
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "8002:8002"
+    volumes:
+      - app-data:/app/data
+    environment:
+      - NEWS_MONKEY_DB=/app/data/news_monkey.db
+      - ENABLE_INGESTION=false
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - SERVICE_ROLE=frontend
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Ollama LLM service: provides embeddings, fact extraction, headline neutralization
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  app-data:
+  ollama-data:

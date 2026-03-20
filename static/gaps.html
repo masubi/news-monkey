@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Monkey — Social vs Traditional Gaps</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-left">
+            <h1><a href="/" class="logo-link">News Monkey</a></h1>
+            <span class="tagline">Facts. Signal. Events.</span>
+            <nav class="header-nav">
+                <a href="/" class="nav-link">News Feed</a>
+                <a href="/markets" class="nav-link">Unusual Polymarket Bets</a>
+                <a href="/gaps" class="nav-link active">Social vs Traditional Gaps</a>
+                <a href="/ai" class="nav-link">AI Intelligence</a>
+                <a href="/sources" class="nav-link">Sources</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span id="update-indicator" class="update-indicator"></span>
+        </div>
+    </header>
+
+    <div id="app">
+        <main id="main-content" class="gaps-page">
+            <section class="gaps-page-header">
+                <h2>Social vs Traditional Gaps <span class="badge badge-alpha">Alpha</span></h2>
+                <p class="gaps-page-subtitle">Divergences between social media and traditional news coverage. Only high-importance, high-impact items are shown. These gaps represent information advantage — where the narrative is forming or lagging.</p>
+                <div class="gaps-metrics-explainer" style="margin-top:10px;font-size:0.8rem;color:var(--text-secondary);line-height:1.5;">
+                    <strong>Impact</strong> = how significant the event is (source count, market data, computed impact score, gap magnitude).
+                    <strong>Importance</strong> = how notable the coverage divergence is (gap score × 30% + source count × 40% + social reach × 30%).
+                    Only items rated <em>High</em> on both axes are shown.
+                </div>
+            </section>
+
+            <!-- Social Leading section (collapsible) -->
+            <section class="admin-section gaps-section">
+                <div class="section-header-collapsible" id="social-leading-toggle">
+                    <h3 class="section-title gap-section-social">Trending on Social, Missing in Traditional <span class="collapse-icon">&#9660;</span></h3>
+                    <span class="section-badge" id="social-leading-count"></span>
+                </div>
+                <div id="social-leading-list" class="gaps-list"></div>
+            </section>
+
+            <!-- Expired gaps (auto-collapsed, items >24h old) -->
+            <section class="admin-section gaps-section expired-section">
+                <div class="section-header-collapsible" id="expired-toggle">
+                    <h3 class="section-title">Expired &amp; Lower Priority <span class="collapse-icon">&#9654;</span></h3>
+                    <span class="section-badge" id="expired-count"></span>
+                </div>
+                <div id="expired-list" class="gaps-list collapsed"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function relativeTime(ts) {
+            if (ts == null || isNaN(ts)) return '';
+            const seconds = Math.floor((Date.now() / 1000) - ts);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        function isExpired(gap) {
+            if (!gap.latest_timestamp) return false;
+            return (Date.now() / 1000 - gap.latest_timestamp) > 86400;
+        }
+
+        function renderGapItem(gap) {
+            const impactLevel = gap.impact || 'medium';
+            const importanceLevel = gap.importance || 'medium';
+            const eventLink = gap.cluster_id ? `<a href="/#event-${escapeHtml(gap.cluster_id)}" class="gap-event-link" title="View event detail">View Event &#8594;</a>` : '';
+            return `
+                <div class="gap-item" data-gap-type="${escapeHtml(gap.gap_type || '')}">
+                    <div class="gap-item-row" role="button" tabindex="0" aria-expanded="false">
+                        <span class="gap-item-ticker">${escapeHtml(gap.topic || gap.ticker || '—')}</span>
+                        <span class="gap-item-headline">${escapeHtml(gap.headline || gap.summary || '')}</span>
+                        <span class="gap-item-type social-lead">Social Leading</span>
+                        <span class="badge badge-impact ${['high','medium','low'].includes(impactLevel) ? impactLevel : 'medium'}" title="Impact: how significant the event is. Based on source count, authority, market data, magnitude, and recency.">${impactLevel.charAt(0).toUpperCase() + impactLevel.slice(1)} Impact</span>
+                        <span class="badge badge-importance ${['high','medium','low'].includes(importanceLevel) ? importanceLevel : 'medium'}" title="Importance: how notable the coverage divergence is. Based on gap score (30%), source count (40%), and social reach (30%).">${importanceLevel.charAt(0).toUpperCase() + importanceLevel.slice(1)} Importance</span>
+                        <span class="gap-item-meta">
+                            <span title="Social sources">${gap.social_count || 0} social</span> /
+                            <span title="Traditional sources">${gap.traditional_count || 0} trad</span>
+                        </span>
+                        ${gap.latest_timestamp ? `<span class="gap-item-time">${relativeTime(gap.latest_timestamp)}</span>` : ''}
+                    </div>
+                    <div class="gap-item-detail hidden">
+                        <ul class="gap-rationale">
+                            ${gap.social_count > 0 ? `<li>Social coverage: ${gap.social_count} distinct post(s), ${(gap.social_coverage || 0).toLocaleString()} interactions${gap.social_signal_type === 'viral' ? ' (1 viral post with high engagement)' : gap.social_signal_type === 'multiple' ? ' (multiple independent posts)' : ''}</li>` : ''}
+                            ${gap.traditional_count > 0 ? `<li>Traditional coverage: ${gap.traditional_count} source(s)</li>` : ''}
+                            <li>Topic is trending on social media but underreported by traditional news outlets</li>
+                            ${gap.topic ? `<li>Topic: ${escapeHtml(gap.topic)}</li>` : ''}
+                        </ul>
+                        ${eventLink}
+                    </div>
+                </div>`;
+        }
+
+        function initCollapsible(toggleId, contentId) {
+            const toggle = document.getElementById(toggleId);
+            const content = document.getElementById(contentId);
+            if (!toggle || !content) return;
+            toggle.setAttribute('role', 'button');
+            toggle.setAttribute('tabindex', '0');
+            toggle.setAttribute('aria-expanded', !content.classList.contains('collapsed'));
+            function toggleSection() {
+                content.classList.toggle('collapsed');
+                const expanded = !content.classList.contains('collapsed');
+                toggle.setAttribute('aria-expanded', expanded);
+                const icon = toggle.querySelector('.collapse-icon');
+                if (icon) icon.textContent = expanded ? '\u25BC' : '\u25B6';
+            }
+            toggle.addEventListener('click', toggleSection);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(); }
+            });
+        }
+
+        async function loadGaps() {
+            // Show skeleton loaders while fetching
+            const skelHtml = '<div class="skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div></div>'.repeat(3);
+            document.getElementById('social-leading-list').innerHTML = skelHtml;
+            try {
+                const res = await fetch('/api/gaps/social-vs-traditional');
+                if (!res.ok) throw new Error('Failed to fetch gaps');
+                const data = await res.json();
+                const highGaps = data.gaps || [];
+                const lowerGaps = data.lower_gaps || [];
+
+                // High gaps are already filtered server-side to high/high; social_leading requires >1 social source
+                const socialLeading = highGaps.filter(g => g.gap_type === 'social_leading' && !isExpired(g) && (g.social_count || 0) > 1);
+                const expired = [...highGaps.filter(g => isExpired(g)), ...lowerGaps.filter(g => !isExpired(g))];
+
+                document.getElementById('social-leading-count').textContent = socialLeading.length + ' gaps detected';
+                document.getElementById('social-leading-list').innerHTML = socialLeading.length
+                    ? socialLeading.map(renderGapItem).join('')
+                    : '<p class="empty-msg">No social-leading gaps detected in the current window.</p>';
+
+                document.getElementById('expired-count').textContent = expired.length + ' items';
+                document.getElementById('expired-list').innerHTML = expired.length
+                    ? expired.map(renderGapItem).join('')
+                    : '<p class="empty-msg">No expired or lower-priority gaps.</p>';
+
+                // Update page subtitle with summary
+                const totalActive = socialLeading.length;
+                const subtitleEl = document.querySelector('.gaps-page-subtitle');
+                if (totalActive > 0 && subtitleEl) {
+                    subtitleEl.textContent =
+                        `${totalActive} High-Impact Gap${totalActive > 1 ? 's' : ''} Detected. ` +
+                        'Divergences between social media and traditional news coverage represent information advantage.';
+                }
+
+            } catch (err) {
+                console.error('Error loading gaps:', err);
+                document.getElementById('social-leading-list').innerHTML = '<p class="error-msg">Failed to load gap data.</p>';
+                document.getElementById('expired-list').innerHTML = '';
+            }
+        }
+
+        // Event delegation for gap item expand/collapse
+        function toggleGapRow(gapRow) {
+            if (gapRow.closest('.gap-event-link')) return;
+            const detail = gapRow.nextElementSibling;
+            if (detail) {
+                detail.classList.toggle('hidden');
+                gapRow.setAttribute('aria-expanded', !detail.classList.contains('hidden'));
+            }
+        }
+        document.getElementById('app').addEventListener('click', function(e) {
+            if (e.target.closest('.gap-event-link')) return;
+            const gapRow = e.target.closest('.gap-item-row');
+            if (gapRow) toggleGapRow(gapRow);
+        });
+        document.getElementById('app').addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const gapRow = e.target.closest('.gap-item-row');
+            if (gapRow) { e.preventDefault(); toggleGapRow(gapRow); }
+        });
+
+        initCollapsible('social-leading-toggle', 'social-leading-list');
+        initCollapsible('expired-toggle', 'expired-list');
+        loadGaps();
+    })();
+    </script>
+</body>
+</html>

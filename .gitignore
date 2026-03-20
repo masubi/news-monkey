@@ -1,0 +1,29 @@
+# Data files
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+
+# Logs
+*.log
+
+# PID files
+*.pid
+*.pid.tmp
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

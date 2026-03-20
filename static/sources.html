@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Monkey — Sources</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-left">
+            <h1><a href="/" class="logo-link">News Monkey</a></h1>
+            <span class="tagline">Facts. Signal. Events.</span>
+            <nav class="header-nav">
+                <a href="/" class="nav-link">News Feed</a>
+                <a href="/markets" class="nav-link">Unusual Polymarket Bets</a>
+                <a href="/gaps" class="nav-link">Social vs Traditional Gaps</a>
+                <a href="/ai" class="nav-link">AI Intelligence</a>
+                <a href="/sources" class="nav-link active">Sources</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span id="update-indicator" class="update-indicator"></span>
+        </div>
+    </header>
+
+    <div id="app">
+        <main id="main-content" class="sources-page">
+            <section class="sources-header">
+                <h2>News Sources</h2>
+                <p class="sources-subtitle">All publishers tracked by News Monkey, ranked by article count and quality metrics.</p>
+                <div class="sources-stats" id="sources-stats"></div>
+            </section>
+
+            <!-- Traditional News Sources (collapsible) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="trad-toggle">
+                    <h3 class="section-title source-group-title">Traditional News Sources <span class="collapse-icon">&#9660;</span></h3>
+                </div>
+                <div id="trad-content">
+                    <p class="admin-description">RSS feeds, wire services, publisher APIs, and Substack publications.</p>
+                    <div id="traditional-publishers" class="sources-list">
+                        <div class="skeleton-card"><div class="skeleton-line w80"></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Social News Sources (collapsible) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="social-toggle">
+                    <h3 class="section-title source-group-title">Social News Sources <span class="collapse-icon">&#9660;</span></h3>
+                </div>
+                <div id="social-content">
+                    <p class="admin-description">Social media feeds polled via public APIs. TikTok, Instagram, Twitter/X, Reddit, Hacker News, Bluesky, and Mastodon.</p>
+                    <div id="social-sources" class="social-sources">
+                        <div class="skeleton-card"><div class="skeleton-line w80"></div></div>
+                    </div>
+                    <div id="social-subreddits" class="social-subreddits" style="margin-top:12px;"></div>
+                    <div id="social-publishers" class="sources-list" style="margin-top:16px;"></div>
+                </div>
+            </section>
+
+            <!-- Prediction Markets (collapsible) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="predict-toggle">
+                    <h3 class="section-title source-group-title">Prediction Markets <span class="collapse-icon">&#9660;</span></h3>
+                </div>
+                <div id="predict-content">
+                    <p class="admin-description">Polymarket, CallSheet, and Kalshi prediction market data, polled for trending and unusual bets.</p>
+                    <div id="prediction-market-sources" class="prediction-market-sources">
+                        <div class="skeleton-card"><div class="skeleton-line w80"></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Active Publishers (collapsible, collapsed by default) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="publishers-toggle">
+                    <h3 class="section-title">All Active Publishers <span class="collapse-icon">&#9654;</span></h3>
+                </div>
+                <div id="publishers-content" class="collapsed">
+                    <div id="sources-list" class="sources-list">
+                        <div class="skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Social Articles (collapsible, collapsed by default) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="recent-toggle">
+                    <h3 class="section-title">Recent Social Articles <span class="collapse-icon">&#9654;</span></h3>
+                </div>
+                <div id="recent-content" class="collapsed">
+                    <p class="admin-description">Latest articles fetched from social media platforms via real HTTP API calls.</p>
+                    <div id="recent-social-articles"></div>
+                </div>
+            </section>
+
+            <!-- Ingestion Pipeline (collapsible) -->
+            <section class="admin-section">
+                <div class="section-header-collapsible" id="pipeline-toggle">
+                    <h3 class="section-title">Ingestion Pipeline Status <span class="collapse-icon">&#9654;</span></h3>
+                </div>
+                <div id="pipeline-content" class="collapsed">
+                    <p class="admin-description">Background polling tasks that automatically ingest content from configured sources.</p>
+                    <div id="ingestion-status" class="ingestion-status"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function safeHref(url) {
+            if (!url) return '';
+            const trimmed = url.trim().toLowerCase();
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                return escapeHtml(url);
+            }
+            return '';
+        }
+
+        function relativeTime(ts) {
+            if (ts == null || isNaN(ts)) return '';
+            const seconds = Math.floor((Date.now() / 1000) - ts);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        function sourceTypeLabel(type) {
+            const labels = { rss: 'RSS', api: 'API', social: 'Social', scrape: 'Scrape' };
+            return labels[type] || type;
+        }
+
+        function sensationalismBar(score) {
+            const pct = Math.round(score * 100);
+            const color = score > 0.5 ? 'var(--high)' : score > 0.25 ? 'var(--medium)' : 'var(--low)';
+            return `<div class="mini-bar"><div class="mini-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
+        }
+
+        async function loadSources() {
+            try {
+                const [srcRes, statsRes, ingRes] = await Promise.all([
+                    fetch('/api/sources'),
+                    fetch('/api/stats'),
+                    fetch('/api/ingestion/status')
+                ]);
+                if (!srcRes.ok || !statsRes.ok || !ingRes.ok) throw new Error('API error');
+                const srcData = await srcRes.json();
+                const statsData = await statsRes.json();
+                const ingData = await ingRes.json();
+
+                renderStats(statsData, srcData.source_count);
+                renderSources(srcData.sources);
+                renderSourcesByType(srcData.sources, srcData.configured_feeds || []);
+                renderSocialSources(srcData.social_stats || [], srcData.social_sources || [], ingData);
+                renderSubreddits(srcData.configured_subreddits || []);
+                renderPredictionMarketSources(ingData);
+                renderIngestionStatus(srcData.ingestion_status || {}, ingData, srcData);
+            } catch (err) {
+                document.getElementById('sources-list').innerHTML = '<p class="error-msg">Failed to load sources.</p>';
+            }
+        }
+
+        function renderStats(stats, sourceCount) {
+            document.getElementById('sources-stats').innerHTML = `
+                <div class="stat-cards">
+                    <div class="stat-card"><span class="stat-value">${sourceCount}</span><span class="stat-label">Publishers</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.article_count || 0}</span><span class="stat-label">Articles</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.social_article_count || 0}</span><span class="stat-label">Social Articles</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.rss_article_count || 0}</span><span class="stat-label">RSS Articles</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.social_publisher_count || 0}</span><span class="stat-label">Social Sources</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.cluster_count || 0}</span><span class="stat-label">Event Clusters</span></div>
+                    <div class="stat-card"><span class="stat-value">${stats.claim_count || 0}</span><span class="stat-label">Claims</span></div>
+                </div>`;
+        }
+
+        function renderPublisherTable(sources, containerId, opts) {
+            if (!sources.length) {
+                document.getElementById(containerId).innerHTML = '<p class="empty-msg">No publishers found.</p>';
+                return;
+            }
+            let html = `
+                <table class="sources-table">
+                    <thead>
+                        <tr>
+                            <th>Publisher</th>
+                            <th>Type</th>
+                            <th>Articles</th>
+                            <th title="Sensationalism score (0.0-1.0). Computed from: emotional word density, absolute language, loaded adjectives, question-bait headlines, ALL CAPS ratio, and exclamation marks.">Avg Sensationalism &#9432;</th>
+                            <th title="Fact density = distinct verified claims / word count. Higher values indicate more factual, data-rich content. Low density articles are mostly opinion or rewrites.">Avg Fact Density &#9432;</th>
+                            <th>Latest Article</th>
+                            <th>First Seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            const showFeeds = opts && opts.showFeeds;
+            sources.forEach(s => {
+                const feeds = (s.feed_urls || []);
+                const hasFeed = showFeeds && feeds.length > 0;
+                const feedIcon = hasFeed ? ' <span class="feed-expand-icon" title="Click to see RSS feeds">&#9654;</span>' : '';
+                html += `
+                    <tr class="source-row-admin${hasFeed ? ' has-feeds' : ''}" ${hasFeed ? 'role="button" tabindex="0" aria-expanded="false"' : ''}>
+                        <td class="source-name">${escapeHtml(s.publisher)}${feedIcon}</td>
+                        <td><span class="source-type-tag ${['rss','api','social','scrape'].includes(s.source_type) ? s.source_type : ''}">${sourceTypeLabel(s.source_type)}</span></td>
+                        <td class="num">${s.article_count}</td>
+                        <td title="Sensationalism: scored 0.0 (neutral) to 1.0 (highly sensational). Based on emotional words, absolutes, loaded adjectives, question-bait patterns, ALL CAPS, and exclamation marks.">${sensationalismBar(s.avg_sensationalism || 0)} <span class="num-small">${(s.avg_sensationalism != null ? s.avg_sensationalism : 0).toFixed(3)}</span></td>
+                        <td class="num" title="Fact density = verified claims / word count. Higher = more factual.">${(s.avg_fact_density != null ? s.avg_fact_density : 0).toFixed(4)}</td>
+                        <td>${s.latest_article ? relativeTime(s.latest_article) : '—'}</td>
+                        <td>${s.earliest_article ? new Date(s.earliest_article * 1000).toLocaleDateString() : '—'}</td>
+                    </tr>`;
+                if (hasFeed) {
+                    html += `<tr class="feed-detail-row hidden"><td colspan="7"><div class="feed-urls-inline">${feeds.map(u => '<span class="feed-icon">RSS</span> <a href="' + safeHref(u) + '" target="_blank" rel="noopener">' + escapeHtml(u) + '</a>').join('<br>')}</div></td></tr>`;
+                }
+            });
+            html += '</tbody></table>';
+            const container = document.getElementById(containerId);
+            container.innerHTML = html;
+
+            // Event delegation for expanding feed rows
+            if (showFeeds) {
+                container.addEventListener('click', function(e) {
+                    const row = e.target.closest('tr.has-feeds');
+                    if (!row) return;
+                    const feedRow = row.nextElementSibling;
+                    if (feedRow && feedRow.classList.contains('feed-detail-row')) {
+                        feedRow.classList.toggle('hidden');
+                        const isExpanded = !feedRow.classList.contains('hidden');
+                        row.setAttribute('aria-expanded', String(isExpanded));
+                        const icon = row.querySelector('.feed-expand-icon');
+                        if (icon) icon.textContent = isExpanded ? '\u25BC' : '\u25B6';
+                    }
+                });
+                container.addEventListener('keydown', function(e) {
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    const row = e.target.closest('tr.has-feeds');
+                    if (!row) return;
+                    e.preventDefault();
+                    row.click();
+                });
+            }
+        }
+
+        function renderSources(sources) {
+            if (!sources.length) {
+                document.getElementById('sources-list').innerHTML = '<p class="empty-msg">No sources yet. Events will appear as articles are ingested.</p>';
+                return;
+            }
+            renderPublisherTable(sources, 'sources-list');
+        }
+
+        function renderSourcesByType(sources, configuredFeeds) {
+            // Split sources into traditional and social
+            const traditional = sources.filter(s => s.source_type === 'rss' || s.source_type === 'api' || s.source_type === 'scrape');
+            const social = sources.filter(s => s.source_type === 'social');
+            // Count unmatched feeds
+            const matchedFeeds = new Set();
+            traditional.forEach(s => (s.feed_urls || []).forEach(u => matchedFeeds.add(u)));
+            const unmatchedFeeds = (configuredFeeds || []).filter(u => !matchedFeeds.has(u));
+            renderPublisherTable(traditional, 'traditional-publishers', { showFeeds: true });
+            // Show unmatched feeds at bottom if any
+            if (unmatchedFeeds.length > 0) {
+                const container = document.getElementById('traditional-publishers');
+                const extra = document.createElement('div');
+                extra.className = 'rss-unmatched';
+                extra.innerHTML = '<strong>' + unmatchedFeeds.length + ' additional RSS feeds</strong> (not yet matched to a publisher):<br>' +
+                    unmatchedFeeds.map(u => '<span class="feed-icon">RSS</span> <a href="' + safeHref(u) + '" target="_blank" rel="noopener" style="color:var(--text-muted)">' + escapeHtml(u) + '</a>').join('<br>');
+                container.appendChild(extra);
+            }
+            renderPublisherTable(social, 'social-publishers');
+        }
+
+        function renderPredictionMarketSources(ingData) {
+            const el = document.getElementById('prediction-market-sources');
+            const tasks = (ingData && ingData.tasks) || {};
+            const polyRunning = tasks.polymarket === true;
+            const enabled = ingData && ingData.enabled;
+
+            el.innerHTML = `
+                <div class="social-source-card">
+                    <span class="social-icon" style="background:var(--market);">PM</span>
+                    <div class="social-source-info">
+                        <span class="social-name">Polymarket — ${polyRunning ? '<span class="pipeline-dot active" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;"></span>Active' : (enabled ? 'Waiting' : 'Disabled')}</span>
+                        <span class="social-status">Gamma API (gamma-api.polymarket.com)</span>
+                        <span class="social-endpoint">Endpoint: <code>/markets</code></span>
+                        <span class="social-poll-interval">Poll interval: ${ingData.publisher_api && ingData.publisher_api.polymarket_poll_interval || '600'}s</span>
+                        <span class="social-impl">Pipeline: <code>ingestion.fetch_polymarket_markets()</code></span>
+                    </div>
+                </div>
+                <div class="social-source-card">
+                    <span class="social-icon" style="background:var(--accent);">CS</span>
+                    <div class="social-source-info">
+                        <span class="social-name">CallSheet — ${polyRunning ? '<span class="pipeline-dot active" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;"></span>Active' : (enabled ? 'Waiting' : 'Disabled')}</span>
+                        <span class="social-status">CallSheet API (callsheet.com/api/v1)</span>
+                        <span class="social-endpoint">Endpoint: <code>/markets</code></span>
+                        <span class="social-poll-interval">Poll interval: 600s</span>
+                        <span class="social-impl">Pipeline: <code>ingestion.fetch_callsheet_markets()</code></span>
+                    </div>
+                </div>
+                <div class="social-source-card">
+                    <span class="social-icon" style="background:var(--text-muted);">KL</span>
+                    <div class="social-source-info">
+                        <span class="social-name">Kalshi — ${polyRunning ? '<span class="pipeline-dot active" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;"></span>Active' : (enabled ? 'Waiting' : 'Disabled')}</span>
+                        <span class="social-status">Kalshi API (trading-api.kalshi.com)</span>
+                        <span class="social-endpoint">Endpoint: <code>/markets</code></span>
+                        <span class="social-poll-interval">Poll interval: 600s</span>
+                        <span class="social-impl">Pipeline: <code>ingestion.fetch_kalshi_markets()</code></span>
+                    </div>
+                </div>`;
+        }
+
+        function renderSocialSources(socialStats, socialSources, ingData) {
+            const el = document.getElementById('social-sources');
+            // Build a map of publisher -> stats from actual DB data
+            const statsMap = {};
+            socialStats.forEach(s => { statsMap[s.publisher] = s; });
+
+            // Social sources come from API with structured data
+            const iconMap = { 'Hacker News': 'HN', 'Reddit': 'R', 'Bluesky': 'BS', 'Mastodon': 'M', 'Twitter/X': 'X', 'TikTok': 'TT', 'Instagram': 'IG' };
+            const implMap = {
+                'Hacker News': 'ingestion.fetch_hn_top_stories()',
+                'Reddit': 'ingestion.fetch_reddit_posts()',
+                'Bluesky': 'ingestion.fetch_bluesky_posts()',
+                'Mastodon': 'ingestion.fetch_mastodon_feeds()',
+                'Twitter/X': 'ingestion.fetch_twitter_rss()',
+                'TikTok': 'ingestion.fetch_tiktok_trending()',
+                'Instagram': 'ingestion.fetch_instagram_posts()',
+            };
+
+            let html = '';
+            (socialSources || []).forEach(src => {
+                const name = src.name || 'Unknown';
+                const icon = iconMap[name] || name.charAt(0);
+                const matchPrefix = name;
+
+                // Find matching stats (Reddit publishers are like "Reddit/r/worldnews")
+                let totalArticles = 0;
+                let totalCoverage = 0;
+                let latestArticle = null;
+                Object.entries(statsMap).forEach(([pub, stats]) => {
+                    if (pub.startsWith(matchPrefix)) {
+                        totalArticles += stats.article_count || 0;
+                        totalCoverage += stats.total_coverage || 0;
+                        if (!latestArticle || (stats.latest_article && stats.latest_article > latestArticle)) {
+                            latestArticle = stats.latest_article;
+                        }
+                    }
+                });
+
+                // Also use articles_ingested from the config if DB stats are empty
+                if (totalArticles === 0 && src.articles_ingested) {
+                    totalArticles = src.articles_ingested;
+                }
+                const statusClass = totalArticles > 0 ? 'active' : 'inactive';
+                const articleInfo = totalArticles > 0
+                    ? `<span class="social-articles"><strong>${totalArticles}</strong> articles ingested (live data)</span>`
+                    : '<span class="social-articles">Polling active, awaiting data</span>';
+                const coverageInfo = totalCoverage > 0
+                    ? `<span class="social-coverage">Coverage: ${totalCoverage.toLocaleString()} interactions</span>`
+                    : '';
+                const lastSeen = latestArticle
+                    ? `<span class="social-last-seen">Last: ${relativeTime(latestArticle)}</span>`
+                    : '';
+
+                const activeLabel = src.active
+                    ? '<span class="pipeline-dot active" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;"></span>Active'
+                    : '<span class="pipeline-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;"></span>Disabled';
+
+                html += `
+                    <div class="social-source-card">
+                        <span class="social-icon">${icon}</span>
+                        <div class="social-source-info">
+                            <span class="social-name">${escapeHtml(name)} — ${activeLabel}</span>
+                            ${articleInfo}
+                            ${coverageInfo}
+                            ${lastSeen}
+                            <span class="social-status ${statusClass}">${escapeHtml(src.api || '')}</span>
+                            <span class="social-poll-interval">Poll interval: ${escapeHtml(src.poll_interval || '')}</span>
+                            ${implMap[name] ? `<span class="social-impl">Pipeline: <code>${implMap[name]}</code></span>` : ''}
+                        </div>
+                    </div>`;
+            });
+
+            el.innerHTML = html;
+        }
+
+        function renderSubreddits(subs) {
+            const el = document.getElementById('social-subreddits');
+            if (!subs.length) { el.innerHTML = ''; return; }
+            el.innerHTML = '<p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">Tracked subreddits:</p>' +
+                subs.map(s => `<span class="feed-icon" style="margin-right:4px;margin-bottom:4px;display:inline-block;">r/${escapeHtml(s)}</span>`).join(' ');
+        }
+
+        function renderIngestionStatus(status, ingData, srcData) {
+            const el = document.getElementById('ingestion-status');
+            if (!status) { el.innerHTML = ''; return; }
+            const enabled = status.enabled;
+            // Use real-time task status from /api/ingestion/status
+            const tasks = (ingData && ingData.tasks) || {};
+            const rssRunning = tasks.rss === true;
+            const socialRunning = tasks.social === true;
+            const polyRunning = tasks.polymarket === true;
+            const newsapiRunning = tasks.newsapi === true;
+            const seenUrls = (ingData && ingData.seen_urls_count) || 0;
+
+            function taskStatus(running) {
+                return running
+                    ? '<span style="color:var(--low);font-weight:600">Running</span>'
+                    : (enabled ? '<span style="color:var(--medium)">Waiting</span>' : '<span style="color:var(--text-muted)">Disabled</span>');
+            }
+
+            // Compute total social articles from social stats
+            const socialStats = (ingData && ingData.social_stats) || [];
+            const totalSocialArticles = socialStats.reduce((sum, s) => sum + (s.article_count || 0), 0);
+            const totalSocialPlatforms = new Set(socialStats.map(s => (s.publisher || '').split('/')[0])).size;
+
+            el.innerHTML = `
+                <div style="margin-bottom:12px;font-size:0.8rem;color:var(--text-muted);">
+                    Seen URLs: <span class="num">${seenUrls}</span> &middot;
+                    Ingestion: <span style="color:${enabled ? 'var(--low)' : 'var(--high)'};">${enabled ? 'Enabled' : 'Disabled'}</span> &middot;
+                    Social articles ingested: <span class="num" style="color:var(--low);font-weight:600;">${totalSocialArticles}</span> from <span class="num">${totalSocialPlatforms}</span> platforms
+                </div>
+                <div class="ingestion-pipeline-grid">
+                    <div class="pipeline-card">
+                        <div class="pipeline-header">
+                            <span class="pipeline-dot ${rssRunning ? 'active' : ''}"></span>
+                            <span class="pipeline-name">RSS Feed Poller</span>
+                        </div>
+                        <span class="pipeline-detail">Polls ${srcData && srcData.configured_feeds ? srcData.configured_feeds.length : '?'} feeds every ${status.rss_poll_interval || 300}s</span>
+                        <span class="pipeline-status">${taskStatus(rssRunning)}</span>
+                    </div>
+                    <div class="pipeline-card">
+                        <div class="pipeline-header">
+                            <span class="pipeline-dot ${socialRunning ? 'active' : ''}"></span>
+                            <span class="pipeline-name">Social Media Poller</span>
+                        </div>
+                        <span class="pipeline-detail">HN + Reddit + Bluesky + Mastodon + Twitter/X + TikTok + Instagram every ${status.social_poll_interval || 300}s</span>
+                        <span class="pipeline-status">${taskStatus(socialRunning)}</span>
+                    </div>
+                    <div class="pipeline-card">
+                        <div class="pipeline-header">
+                            <span class="pipeline-dot ${polyRunning ? 'active' : ''}"></span>
+                            <span class="pipeline-name">Polymarket Poller</span>
+                        </div>
+                        <span class="pipeline-detail">Trending markets every ${status.polymarket_poll_interval || 600}s</span>
+                        <span class="pipeline-status">${taskStatus(polyRunning)}</span>
+                    </div>
+                    ${newsapiRunning ? `<div class="pipeline-card">
+                        <div class="pipeline-header">
+                            <span class="pipeline-dot active"></span>
+                            <span class="pipeline-name">NewsAPI Publisher API</span>
+                        </div>
+                        <span class="pipeline-detail">general + business + technology categories</span>
+                        <span class="pipeline-status">${taskStatus(newsapiRunning)}</span>
+                    </div>` : ''}
+                    <div class="pipeline-card">
+                        <div class="pipeline-header">
+                            <span class="pipeline-dot ${enabled ? 'active' : ''}"></span>
+                            <span class="pipeline-name">Article Scraper</span>
+                        </div>
+                        <span class="pipeline-detail">Scrapes full article text when RSS excerpt &lt;100 words</span>
+                        <span class="pipeline-status">${enabled ? '<span style="color:var(--low);font-weight:600">Active</span>' : '<span style="color:var(--text-muted)">Disabled</span>'}</span>
+                    </div>
+                </div>`;
+        }
+
+        async function loadRecentSocial() {
+            const el = document.getElementById('recent-social-articles');
+            try {
+                const res = await fetch('/api/social/recent?limit=30');
+                if (!res.ok) throw new Error('Failed to fetch social articles');
+                const data = await res.json();
+                if (!data.articles || !data.articles.length) {
+                    el.innerHTML = '<p class="empty-msg">No social articles ingested yet. Pipeline is starting up.</p>';
+                    return;
+                }
+                const platformSummary = Object.entries(data.platforms || {}).map(([k, v]) => `${escapeHtml(k)}: ${v}`).join(', ');
+                let html = `<p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">Platforms: ${platformSummary}</p>`;
+                html += '<table class="sources-table"><thead><tr><th>Title</th><th>Platform</th><th>Time</th><th>URL</th></tr></thead><tbody>';
+                data.articles.forEach(a => {
+                    const platform = a.publisher || 'Unknown';
+                    html += `<tr>
+                        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.title || '')}</td>
+                        <td><span class="source-type-tag social">${escapeHtml(platform)}</span></td>
+                        <td>${relativeTime(a.timestamp)}</td>
+                        <td>${a.url ? `<a href="${safeHref(a.url)}" target="_blank" rel="noopener">Link</a>` : '—'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                el.innerHTML = html;
+            } catch (err) {
+                console.error('Error loading recent social articles:', err);
+                el.innerHTML = '<p class="error-msg">Failed to load social articles. Try refreshing the page.</p>';
+            }
+        }
+
+        function initCollapsible(toggleId, contentId) {
+            const toggle = document.getElementById(toggleId);
+            const content = document.getElementById(contentId);
+            if (!toggle || !content) return;
+            toggle.setAttribute('role', 'button');
+            toggle.setAttribute('tabindex', '0');
+            toggle.setAttribute('aria-expanded', !content.classList.contains('collapsed'));
+            function toggleSection() {
+                content.classList.toggle('collapsed');
+                const expanded = !content.classList.contains('collapsed');
+                toggle.setAttribute('aria-expanded', expanded);
+                const icon = toggle.querySelector('.collapse-icon');
+                icon.textContent = expanded ? '\u25BC' : '\u25B6';
+            }
+            toggle.addEventListener('click', toggleSection);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(); }
+            });
+        }
+
+
+        initCollapsible('trad-toggle', 'trad-content');
+        initCollapsible('social-toggle', 'social-content');
+        initCollapsible('predict-toggle', 'predict-content');
+        initCollapsible('publishers-toggle', 'publishers-content');
+        initCollapsible('recent-toggle', 'recent-content');
+        initCollapsible('pipeline-toggle', 'pipeline-content');
+
+        loadSources();
+        loadRecentSocial();
+    })();
+    </script>
+</body>
+</html>

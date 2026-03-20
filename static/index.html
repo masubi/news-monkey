@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Monkey</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-left">
+            <h1><a href="/" class="logo-link">News Monkey</a></h1>
+            <span class="tagline">Facts. Signal. Events.</span>
+            <nav class="header-nav">
+                <a href="/" class="nav-link active">News Feed</a>
+                <a href="/markets" class="nav-link">Unusual Polymarket Bets</a>
+                <a href="/gaps" class="nav-link">Social vs Traditional Gaps</a>
+                <a href="/ai" class="nav-link">AI Intelligence</a>
+                <a href="/sources" class="nav-link">Sources</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span id="update-indicator" class="update-indicator">updated just now</span>
+            <span id="ws-status" class="ws-status connected" title="Live updates connected">&#9679;</span>
+        </div>
+    </header>
+
+    <div id="app">
+        <aside id="sidebar" class="sidebar">
+            <button id="filter-toggle" class="filter-toggle" aria-label="Toggle filters" aria-expanded="false">Filters</button>
+            <div id="filter-panel" class="filter-panel">
+                <div class="filter-group">
+                    <label for="time-range">Time Range</label>
+                    <select id="time-range">
+                        <option value="1h">Last hour</option>
+                        <option value="6h">Last 6 hours</option>
+                        <option value="24h" selected>Last 24 hours</option>
+                        <option value="7d">Last 7 days</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+                <div id="custom-range" class="filter-group custom-range hidden">
+                    <label for="custom-start">From</label>
+                    <input type="datetime-local" id="custom-start">
+                    <label for="custom-end">To</label>
+                    <input type="datetime-local" id="custom-end">
+                </div>
+                <div class="filter-group">
+                    <label for="impact-filter">Impact</label>
+                    <select id="impact-filter">
+                        <option value="">All</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="topic-filter">Topic</label>
+                    <select id="topic-filter">
+                        <option value="">All</option>
+                        <option value="Market & Economy">Market & Economy</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Politics">Politics</option>
+                        <option value="Health">Health</option>
+                        <option value="Environment">Environment</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="geography-filter">Geography</label>
+                    <select id="geography-filter">
+                        <option value="">All</option>
+                        <option value="US">US</option>
+                        <option value="Europe">Europe</option>
+                        <option value="Asia">Asia</option>
+                        <option value="Global">Global</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="min-sources">Min Sources</label>
+                    <input type="number" id="min-sources" min="1" max="100" value="1">
+                </div>
+                <div class="filter-group">
+                    <label for="market-moving">
+                        <input type="checkbox" id="market-moving"> Market-Moving Only
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label for="hide-read">
+                        <input type="checkbox" id="hide-read" checked> Hide Read Items
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label for="keyword-search">Search</label>
+                    <input type="text" id="keyword-search" placeholder="Keyword or entity...">
+                </div>
+                <div class="filter-actions">
+                    <button id="reset-filters" class="btn btn-secondary">Reset Filters</button>
+                </div>
+            </div>
+        </aside>
+
+        <main id="main-content">
+            <!-- Timeline view (default) -->
+            <section id="timeline-view">
+                <div class="quick-filters">
+                    <button class="quick-filter active" data-filter="">All Events</button>
+                    <button class="quick-filter" data-filter="Market & Economy">Market & Economy</button>
+                    <button class="quick-filter" data-filter="Technology">Technology</button>
+                    <button class="quick-filter" data-filter="Politics">Politics</button>
+                    <button class="quick-filter" data-filter="Health">Health</button>
+                    <button class="quick-filter" data-filter="Environment">Environment</button>
+                </div>
+                <div id="event-list" class="event-list">
+                    <!-- Skeleton cards shown during loading -->
+                </div>
+                <div id="empty-state" class="empty-state hidden">
+                    <h2>No events found</h2>
+                    <p>Try adjusting your filters or expanding the time range.</p>
+                    <button id="reset-from-empty" class="btn btn-primary">Reset Filters</button>
+                </div>
+                <div id="first-load-state" class="first-load-state hidden">
+                    <h2>Welcome to News Monkey</h2>
+                    <p>Your news intelligence dashboard. Events are deduplicated across sources,
+                    stripped of sensationalism, and organized by factual claims.</p>
+                    <p>Loading events... <span class="spinner"></span></p>
+                </div>
+            </section>
+
+            <!-- Detail view (shown when clicking an event) -->
+            <section id="detail-view" class="hidden">
+                <button id="back-to-timeline" class="btn btn-back">&larr; Back to News Feed</button>
+                <div id="detail-content"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

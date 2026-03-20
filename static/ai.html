@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Monkey — AI Intelligence</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header id="header">
+        <div class="header-left">
+            <h1><a href="/" class="logo-link">News Monkey</a></h1>
+            <span class="tagline">Facts. Signal. Events.</span>
+            <nav class="header-nav">
+                <a href="/" class="nav-link">News Feed</a>
+                <a href="/markets" class="nav-link">Unusual Polymarket Bets</a>
+                <a href="/gaps" class="nav-link">Social vs Traditional Gaps</a>
+                <a href="/ai" class="nav-link active">AI Intelligence</a>
+                <a href="/sources" class="nav-link">Sources</a>
+            </nav>
+        </div>
+        <div class="header-right">
+            <span id="update-indicator" class="update-indicator"></span>
+        </div>
+    </header>
+
+    <div id="app">
+        <main id="main-content" class="ai-page">
+            <section class="ai-page-header">
+                <h2>AI Intelligence</h2>
+                <p class="ai-page-subtitle">Factual AI news from across sources. Companies, models, infrastructure, energy, and open-source developments. Hype and sensationalism filtered out.</p>
+            </section>
+
+            <div class="ai-controls">
+                <div class="ai-time-filter">
+                    <label for="ai-time-range">Time Range</label>
+                    <select id="ai-time-range">
+                        <option value="1h">Last hour</option>
+                        <option value="6h">Last 6 hours</option>
+                        <option value="24h" selected>Last 24 hours</option>
+                        <option value="7d">Last 7 days</option>
+                    </select>
+                </div>
+                <div class="ai-impact-filter">
+                    <label for="ai-impact">Impact</label>
+                    <select id="ai-impact">
+                        <option value="">All</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                    </select>
+                </div>
+                <div class="ai-read-controls">
+                    <label class="hide-read-label"><input type="checkbox" id="ai-hide-read" checked> Hide read</label>
+                    <button class="btn btn-mark-all-read" id="ai-mark-all-read" title="Mark all items as read">Mark All Read</button>
+                </div>
+            </div>
+
+            <!-- AI News section (collapsible, expanded by default) -->
+            <section class="admin-section ai-section">
+                <div class="section-header-collapsible" id="ai-news-toggle">
+                    <h3 class="section-title">AI News <span class="collapse-icon">&#9660;</span></h3>
+                    <span class="section-badge" id="ai-news-count"></span>
+                </div>
+                <div id="ai-news-list" class="ai-news-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        const READ_STORAGE_KEY = 'news-monkey-read-events';
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function safeHref(url) {
+            if (!url) return '';
+            const trimmed = url.trim().toLowerCase();
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                return escapeHtml(url);
+            }
+            return '';
+        }
+
+        function relativeTime(ts) {
+            if (ts == null || isNaN(ts)) return '';
+            const seconds = Math.floor((Date.now() / 1000) - ts);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        function getReadEvents() {
+            try {
+                return JSON.parse(localStorage.getItem(READ_STORAGE_KEY) || '[]');
+            } catch { return []; }
+        }
+
+        function markEventRead(eventId) {
+            const read = getReadEvents();
+            if (!read.includes(eventId)) {
+                read.push(eventId);
+                if (read.length > 500) read.splice(0, read.length - 500);
+                localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(read));
+            }
+        }
+
+        function renderRelatedStory(story) {
+            const impactLevel = story.impact || 'medium';
+            const sourceUrl = safeHref(story.source_url);
+            const sourceLink = sourceUrl
+                ? `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="ai-source-link" title="View original article">Source &#8594;</a>`
+                : '';
+            const eventLink = story.id
+                ? `<a href="/#event-${escapeHtml(story.id)}" class="ai-event-link" title="View event detail">Detail &#8594;</a>`
+                : '';
+            return `<div class="ai-related-story">
+                <span class="ai-item-headline">${escapeHtml(story.headline || '')}</span>
+                <span class="badge badge-impact ${['high','medium','low'].includes(impactLevel) ? impactLevel : 'medium'}">${impactLevel.charAt(0).toUpperCase() + impactLevel.slice(1)}</span>
+                <span class="ai-item-sources">${story.source_count || 0} sources</span>
+                ${story.latest_timestamp ? `<span class="ai-item-time">${relativeTime(story.latest_timestamp)}</span>` : ''}
+                ${sourceLink}${eventLink}
+            </div>`;
+        }
+
+        function renderAiItem(event) {
+            const impactLevel = event.impact || 'medium';
+            const readEvents = getReadEvents();
+            const isRead = readEvents.includes(event.id);
+            const sourceUrl = safeHref(event.source_url);
+            const sourceLink = sourceUrl
+                ? `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="ai-source-link" title="View original article">Source &#8594;</a>`
+                : '';
+            const eventLink = event.id
+                ? `<a href="/#event-${escapeHtml(event.id)}" class="ai-event-link" title="View event detail">Detail &#8594;</a>`
+                : '';
+            const related = event.related_stories || [];
+            const relatedBadge = related.length > 0
+                ? `<span class="ai-related-badge" role="button" tabindex="0" title="Click to see ${related.length} related stor${related.length === 1 ? 'y' : 'ies'}">+${related.length} related</span>`
+                : '';
+
+            return `
+                <div class="ai-item${isRead ? ' ai-item-read' : ''}" data-event-id="${escapeHtml(event.id || '')}">
+                    <div class="ai-item-row" role="button" tabindex="0" aria-expanded="false">
+                        <button class="mark-read-btn${isRead ? ' is-read' : ''}" title="${isRead ? 'Already read' : 'Mark as read'}" data-mark-read="${escapeHtml(event.id || '')}">&#10003;</button>
+                        <span class="ai-item-headline">${escapeHtml(event.neutral_headline || event.headline || '')}</span>
+                        ${relatedBadge}
+                        <span class="badge badge-impact ${['high','medium','low'].includes(impactLevel) ? impactLevel : 'medium'}" title="Impact level">${impactLevel.charAt(0).toUpperCase() + impactLevel.slice(1)}</span>
+                        <span class="ai-item-sources" title="Number of independent sources">${event.source_count || 0} sources</span>
+                        ${event.latest_timestamp ? `<span class="ai-item-time" title="${new Date((event.latest_timestamp || 0) * 1000).toLocaleString()}">${relativeTime(event.latest_timestamp)}</span>` : ''}
+                    </div>
+                    <div class="ai-item-detail hidden">
+                        <p class="ai-item-summary">${escapeHtml(event.summary || '')}</p>
+                        ${event.entities ? `<div class="ai-item-entities">${escapeHtml(event.entities)}</div>` : ''}
+                        <div class="ai-item-actions">
+                            ${sourceLink}
+                            ${eventLink}
+                        </div>
+                    </div>
+                    ${related.length > 0 ? `<div class="ai-related-list hidden">${related.map(renderRelatedStory).join('')}</div>` : ''}
+                </div>`;
+        }
+
+        function initCollapsible(toggleId, contentId) {
+            const toggle = document.getElementById(toggleId);
+            const content = document.getElementById(contentId);
+            if (!toggle || !content) return;
+            toggle.setAttribute('role', 'button');
+            toggle.setAttribute('tabindex', '0');
+            toggle.setAttribute('aria-expanded', !content.classList.contains('collapsed'));
+            function toggleSection() {
+                content.classList.toggle('collapsed');
+                const expanded = !content.classList.contains('collapsed');
+                toggle.setAttribute('aria-expanded', expanded);
+                const icon = toggle.querySelector('.collapse-icon');
+                icon.textContent = expanded ? '\u25BC' : '\u25B6';
+            }
+            toggle.addEventListener('click', toggleSection);
+            toggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(); }
+            });
+        }
+
+        let currentController = null;
+        let lastLoadedEvents = [];
+
+        function getHideRead() {
+            return document.getElementById('ai-hide-read').checked;
+        }
+
+        function renderLoadedEvents() {
+            const hideRead = getHideRead();
+            const readEvents = getReadEvents();
+            let events = lastLoadedEvents;
+            if (hideRead) {
+                events = events.filter(e => !readEvents.includes(e.id));
+            }
+            const unreadCount = lastLoadedEvents.filter(e => !readEvents.includes(e.id)).length;
+            document.getElementById('ai-news-count').textContent = events.length + ' items';
+            const markAllBtn = document.getElementById('ai-mark-all-read');
+            if (markAllBtn) markAllBtn.style.display = unreadCount > 0 ? '' : 'none';
+
+            if (events.length === 0) {
+                const msg = lastLoadedEvents.length > 0
+                    ? 'All items have been read. <a href="#" id="ai-show-all">Show all</a>'
+                    : 'No AI-related events found in this time range. Try expanding to 7 days.';
+                document.getElementById('ai-news-list').innerHTML = '<p class="empty-msg">' + msg + '</p>';
+            } else {
+                document.getElementById('ai-news-list').innerHTML = events.map(renderAiItem).join('');
+            }
+        }
+
+        async function loadAiEvents() {
+            if (currentController) currentController.abort();
+            currentController = new AbortController();
+
+            const timeRange = document.getElementById('ai-time-range').value;
+            const impact = document.getElementById('ai-impact').value;
+
+            const skelHtml = '<div class="skeleton-card"><div class="skeleton-line w80"></div><div class="skeleton-line w60"></div></div>'.repeat(3);
+            document.getElementById('ai-news-list').innerHTML = skelHtml;
+
+            try {
+                const params = new URLSearchParams({ time_range: timeRange, limit: '100' });
+                if (impact) params.set('impact', impact);
+
+                const res = await fetch('/api/events/ai?' + params.toString(), { signal: currentController.signal });
+                if (!res.ok) throw new Error('Failed to fetch AI events');
+                const data = await res.json();
+                lastLoadedEvents = data.events || [];
+
+                renderLoadedEvents();
+                document.getElementById('update-indicator').textContent = 'updated just now';
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.error('Error loading AI events:', err);
+                document.getElementById('ai-news-list').innerHTML = '<p class="error-msg">Failed to load AI events.</p>';
+            }
+        }
+
+        // Event delegation for expand/collapse and mark-read
+        document.getElementById('app').addEventListener('click', function(e) {
+            // Mark All Read button
+            if (e.target.closest('#ai-mark-all-read')) {
+                e.stopPropagation();
+                const read = getReadEvents();
+                const newIds = lastLoadedEvents.map(ev => ev.id).filter(id => !read.includes(id));
+                if (newIds.length === 0) return;
+                const combined = [...read, ...newIds];
+                if (combined.length > 500) combined.splice(0, combined.length - 500);
+                localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(combined));
+                renderLoadedEvents();
+                return;
+            }
+
+            // Show all link in empty state
+            if (e.target.closest('#ai-show-all')) {
+                e.preventDefault();
+                document.getElementById('ai-hide-read').checked = false;
+                renderLoadedEvents();
+                return;
+            }
+
+            // Mark read button
+            const readBtn = e.target.closest('[data-mark-read]');
+            if (readBtn) {
+                e.stopPropagation();
+                const eventId = readBtn.getAttribute('data-mark-read');
+                markEventRead(eventId);
+                readBtn.classList.add('is-read');
+                readBtn.title = 'Already read';
+                const item = readBtn.closest('.ai-item');
+                if (item) item.classList.add('ai-item-read');
+                if (getHideRead()) renderLoadedEvents();
+                return;
+            }
+
+            // Related stories badge toggle
+            const relatedBadge = e.target.closest('.ai-related-badge');
+            if (relatedBadge) {
+                e.stopPropagation();
+                const item = relatedBadge.closest('.ai-item');
+                if (item) {
+                    const relatedList = item.querySelector('.ai-related-list');
+                    if (relatedList) relatedList.classList.toggle('hidden');
+                }
+                return;
+            }
+
+            // Don't toggle on link clicks
+            if (e.target.closest('.ai-source-link') || e.target.closest('.ai-event-link')) return;
+            if (e.target.closest('.ai-related-story')) return;
+
+            // Expand/collapse row
+            const row = e.target.closest('.ai-item-row');
+            if (row) {
+                const detail = row.nextElementSibling;
+                if (detail && detail.classList.contains('ai-item-detail')) {
+                    detail.classList.toggle('hidden');
+                    row.setAttribute('aria-expanded', !detail.classList.contains('hidden'));
+                }
+            }
+        });
+
+        document.getElementById('app').addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const row = e.target.closest('.ai-item-row');
+            if (row) { e.preventDefault(); row.click(); }
+        });
+
+        // Filter change listeners
+        document.getElementById('ai-time-range').addEventListener('change', loadAiEvents);
+        document.getElementById('ai-impact').addEventListener('change', loadAiEvents);
+        document.getElementById('ai-hide-read').addEventListener('change', renderLoadedEvents);
+
+        initCollapsible('ai-news-toggle', 'ai-news-list');
+        loadAiEvents();
+    })();
+    </script>
+</body>
+</html>
