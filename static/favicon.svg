@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Ears -->
+  <circle cx="10" cy="22" r="10" fill="#c68642"/>
+  <circle cx="10" cy="22" r="6" fill="#f5c58a"/>
+  <circle cx="54" cy="22" r="10" fill="#c68642"/>
+  <circle cx="54" cy="22" r="6" fill="#f5c58a"/>
+  <!-- Head -->
+  <circle cx="32" cy="30" r="22" fill="#c68642"/>
+  <!-- Face -->
+  <ellipse cx="32" cy="36" rx="14" ry="12" fill="#f5c58a"/>
+  <!-- Eyes -->
+  <circle cx="24" cy="28" r="3" fill="white"/>
+  <circle cx="40" cy="28" r="3" fill="white"/>
+  <circle cx="25" cy="28" r="1.8" fill="#1a1a1a"/>
+  <circle cx="41" cy="28" r="1.8" fill="#1a1a1a"/>
+  <!-- Nose -->
+  <ellipse cx="32" cy="36" rx="4" ry="2.5" fill="#8b5e3c"/>
+  <!-- Mouth -->
+  <path d="M28 40 Q32 44 36 40" stroke="#8b5e3c" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Newspaper -->
+  <rect x="16" y="48" rx="1" width="32" height="14" fill="white" stroke="#333" stroke-width="1.2"/>
+  <line x1="20" y1="52" x2="44" y2="52" stroke="#333" stroke-width="1.5"/>
+  <line x1="20" y1="55" x2="38" y2="55" stroke="#aaa" stroke-width="0.8"/>
+  <line x1="20" y1="57.5" x2="44" y2="57.5" stroke="#aaa" stroke-width="0.8"/>
+</svg>
